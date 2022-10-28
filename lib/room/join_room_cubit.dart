@@ -9,18 +9,23 @@ class JoinRoomCubit extends TwilioBaseCubit<CubitBaseState> {
   // }
 
   JoinRoomCubit() : super(RoomInitial.init());
-  submit(name) async {
+
+  String? token;
+  // String? identity;
+
+  submit(name, identity) async {
     emit(RoomLoading());
-    String? token;
-    String? identity;
+
     try {
       final twilioRoomTokenResponse =
-          await TwilioFunctionsService.instance.createToken(name!);
+          await TwilioFunctionsService.instance.createToken(identity!);
+      print(twilioRoomTokenResponse);
       token = twilioRoomTokenResponse['accessToken'];
-      identity = twilioRoomTokenResponse['user'];
-
+      // print(token);
+      // identity = twilioRoomTokenResponse['user'];
+      // print(identity);
       if (token != null && identity != null) {
-        emit(RoomLoaded(name: name ?? '', token: token, identity: identity));
+        emit(RoomLoaded(name: name ?? '', token: token!, identity: identity!));
       } else {
         emit(RoomError(error: 'Access token is empty!'));
       }

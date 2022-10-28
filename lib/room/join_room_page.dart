@@ -18,28 +18,31 @@ class RoomPage extends StatefulWidget {
 }
 
 class _RoomPageState extends State<RoomPage> {
-  TextEditingController nameController = TextEditingController();
-  GlobalKey<FormState> formkey = GlobalKey<FormState>();
+  TextEditingController _nameController = TextEditingController();
+  GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   @override
   Widget build(BuildContext context) {
     return CubitProvider<CubitBaseState, JoinRoomCubit>(
         create: (context) => JoinRoomCubit(),
         listener: (context, state) async {
+          print(state);
+
           if (state is RoomLoaded) {
-            await Navigator.of(context).push(
-              MaterialPageRoute<ConferencePage>(
-                  fullscreenDialog: true,
-                  builder: (BuildContext context) =>
-                      // ConferencePage(roomModel: bloc),
-                      BlocProvider(
-                        create: (BuildContext context) => ConferenceCubit(
-                          identity: state.identity,
-                          token: state.token,
-                          name: state.name,
-                        ),
-                        child: ConferencePage(),
-                      )),
-            );
+            print('navigation ----->');
+            await Navigator.of(context).push(MaterialPageRoute<ConferencePage>(
+                fullscreenDialog: true,
+                builder: (BuildContext context) =>
+                    // ConferencePage(roomModel: bloc),
+                    BlocProvider(
+                      create: (BuildContext context) => ConferenceCubit(
+                        identity: state.identity,
+                        token: state.token,
+                        name: state.name,
+                      ),
+                      child: ConferencePage(
+                        video: Container(),
+                      ),
+                    )));
           }
         },
         builder: (context, state, bloc) => Scaffold(
@@ -51,51 +54,63 @@ class _RoomPageState extends State<RoomPage> {
                   style: TextStyle(color: Colors.yellow),
                 ),
               ),
-              body: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: TextField(
-                        controller: nameController,
-                        decoration: const InputDecoration(
-                          enabledBorder: OutlineInputBorder(
-                            borderSide: BorderSide(
-                                width: 1, color: Colors.red), //<-- SEE HERE
+              body: Form(
+                key: _formKey,
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: TextFormField(
+                          controller: _nameController,
+                          decoration: const InputDecoration(
+                            enabledBorder: OutlineInputBorder(
+                              borderSide: BorderSide(
+                                  width: 1, color: Colors.red), //<-- SEE HERE
+                            ),
+                            border: OutlineInputBorder(
+                              borderSide: BorderSide(
+                                  width: 3, color: Colors.red), //<-- SEE HERE
+                            ),
+                            labelText: 'Name',
+                            labelStyle: TextStyle(
+                                fontSize: 20.0,
+                                color: Color.fromARGB(255, 2, 157, 7)),
+                            hintText: 'Enter Name',
+                            hintStyle: TextStyle(
+                                fontSize: 20.0,
+                                color: Color.fromARGB(255, 39, 126, 197)),
                           ),
-                          border: OutlineInputBorder(
-                            borderSide: BorderSide(
-                                width: 3, color: Colors.red), //<-- SEE HERE
-                          ),
-                          labelText: 'Name',
-                          labelStyle: TextStyle(
-                              fontSize: 20.0,
-                              color: Color.fromARGB(255, 2, 157, 7)),
-                          hintText: 'Enter Name',
-                          hintStyle: TextStyle(
-                              fontSize: 20.0,
-                              color: Color.fromARGB(255, 39, 126, 197)),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please enter some text';
+                            }
+                            return null;
+                          },
                         ),
                       ),
-                    ),
-                    ElevatedButton(
-                      onPressed: () {
-                        bloc.submit(nameController.text.toString());
-                      },
-                      style: ElevatedButton.styleFrom(
-                        elevation: 20,
-                        onPrimary: Colors.black87,
-                        primary: Colors.grey[300],
-                        minimumSize: const Size(88, 36),
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(2)),
+                      ElevatedButton(
+                        onPressed: () {
+                          if (_formKey.currentState!.validate()) {
+                            bloc.submit(
+                                'bo0mtan', _nameController.text.toString());
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          elevation: 20,
+                          onPrimary: Colors.black87,
+                          primary: Colors.grey[300],
+                          minimumSize: const Size(88, 36),
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.all(Radius.circular(2)),
+                          ),
                         ),
-                      ),
-                      child: const Text('Join'),
-                    )
-                  ],
+                        child: const Text('Join'),
+                      )
+                    ],
+                  ),
                 ),
               ),
             ));

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:twilio_programmable_video/twilio_programmable_video.dart';
+import 'package:twiliovideochat/conference/participant_widget.dart';
 import 'package:twiliovideochat/cubit/base_cubit.dart';
 import 'package:twiliovideochat/cubit/base_states.dart';
 import 'package:uuid/uuid.dart';
@@ -7,11 +8,12 @@ import 'conference_state.dart';
 
 class ConferenceCubit extends TwilioBaseCubit<CubitBaseState> {
   String name, token, identity;
-  late final _room;
-  late final _cameraCapturer;
-  late final trackId;
-  late final _streamSubscriptions;
-  late final _participants;
+  Room? _room;
+  // final Completer<Room> _completer = Completer<Room>();
+  CameraCapturer? _cameraCapturer;
+  String? trackId;
+  var _streamSubscriptions;
+  var _participants;
   ConferenceCubit({
     required this.name,
     required this.token,
@@ -23,25 +25,31 @@ class ConferenceCubit extends TwilioBaseCubit<CubitBaseState> {
   connect() async {
     print('[ APPDEBUG ] ConferenceRoom.connect()');
     try {
-      await TwilioProgrammableVideo.setSpeakerphoneOn(true);
-
+      await TwilioProgrammableVideo.requestPermissionForCameraAndMicrophone();
+      // await TwilioProgrammableVideo.setSpeakerphoneOn(true);
       final sources = await CameraSource.getSources();
       _cameraCapturer = CameraCapturer(
         sources.firstWhere((source) => source.isFrontFacing),
       );
-      trackId = Uuid().v4();
+      var localVideoTrack = LocalVideoTrack(true, _cameraCapturer!);
+      var widget = localVideoTrack.widget();
+
+      print(_cameraCapturer);
+      trackId = const Uuid().v4();
+      print(trackId);
 
       var connectOptions = ConnectOptions(
         token,
         roomName: name,
         preferredAudioCodecs: [OpusCodec()],
         audioTracks: [LocalAudioTrack(true, 'audio_track-$trackId')],
+        // audioTracks: [LocalAudioTrack(true, 'audio_track-$trackId')],
         dataTracks: [
           LocalDataTrack(
             DataTrackOptions(name: 'data_track-$trackId'),
           )
         ],
-        videoTracks: [LocalVideoTrack(true, _cameraCapturer)],
+        videoTracks: [LocalVideoTrack(true, _cameraCapturer!)],
         enableNetworkQuality: true,
         networkQualityConfiguration: NetworkQualityConfiguration(
           remote: NetworkQualityVerbosity.NETWORK_QUALITY_VERBOSITY_MINIMAL,
@@ -51,20 +59,58 @@ class ConferenceCubit extends TwilioBaseCubit<CubitBaseState> {
 
       _room = await TwilioProgrammableVideo.connect(connectOptions);
 
-      _streamSubscriptions.add(_room.onConnected.listen(_onConnected));
-      _streamSubscriptions.add(_room.onDisconnected.listen(_onDisconnected));
-      _streamSubscriptions.add(_room.onReconnecting.listen(_onReconnecting));
+      _streamSubscriptions.add(_room!.onConnected.listen(_onConnected));
+      _streamSubscriptions.add(_room!.onDisconnected.listen(_onDisconnected));
+      _streamSubscriptions.add(_room!.onReconnecting.listen(_onReconnecting));
       _streamSubscriptions
-          .add(_room.onConnectFailure.listen(_onConnectFailure));
+          .add(_room!.onConnectFailure.listen(_onConnectFailure));
+
+      // _room!.onConnected.listen(_onConnected);
+      // _room!.onConnectFailure.listen(_onConnectFailure);
+      // _room!.onParticipantConnected.listen(_onParticipantConnected);
+      // _room!.onParticipantConnected.listen(_onParticipantDisconnected);
+      // return _completer.future;
     } catch (err) {
       print('[ APPDEBUG ] $err');
       rethrow;
     }
   }
 
+  // Future<void> _onConnected(Room room) async {
+  //   print('Connected to ${room.name}');
+
+  // }
+
+//   Future<void>  _onConnectFailure(RoomConnectFailureEvent event) async{
+//     print('Failed connecting, exception: ${event.exception!.message}');
+// };
+
+// Future<void>  _onDisconnected(RoomDisconnectedEvent event) async{
+//   print('Disconnected from ${event.room.name}');
+// }
+// Future<void>  _onParticipantConnected(RoomParticipantConnectedEvent event) async{
+//   print('Participant ${event.remoteParticipant.identity} has joined the room');
+//   event.remoteParticipant.onVideoTrackSubscribed.listen((RemoteVideoTrackSubscriptionEvent event) {
+//     var mirror = false;
+//     _widgets.add(event.remoteParticipant.widget(mirror));
+//   });
+// }
+
+// _onParticipantDisconnected(RoomParticipantDisconnectedEvent event) async{
+//   print('Participant ${event.remoteParticipant.identity} has left the room');
+// }
+
+// room.onRecordingStarted((Room room) {
+//   print('Recording started in ${room.name}');
+// });
+
+// room.onRecordingStopped((Room room) {
+//   print('Recording stopped in ${room.name}');
+// });
+
   Future<void> disconnect() async {
     print('[ APPDEBUG ] ConferenceRoom.disconnect()');
-    await _room.disconnect();
+    await _room!.disconnect();
   }
 
   void _onDisconnected(RoomDisconnectedEvent event) {
@@ -80,19 +126,21 @@ class ConferenceCubit extends TwilioBaseCubit<CubitBaseState> {
 
     // When connected for the first time, add remote participant listeners
     _streamSubscriptions
-        .add(_room.onParticipantConnected.listen(_onParticipantConnected));
+        .add(_room!.onParticipantConnected.listen(_onParticipantConnected));
     _streamSubscriptions.add(
-        _room.onParticipantDisconnected.listen(_onParticipantDisconnected));
+        _room!.onParticipantDisconnected.listen(_onParticipantDisconnected));
     final localParticipant = room.localParticipant;
     if (localParticipant == null) {
       print(
           '[ APPDEBUG ] ConferenceRoom._onConnected => localParticipant is null');
       return;
     }
-
-    // Only add ourselves when connected for the first time too.
-    _participants.add(_buildParticipant(
-        child: localParticipant.localVideoTracks[0].localVideoTrack.widget(),
+// Get the first participant from the room.
+    var remoteParticipant = room.remoteParticipants[0];
+    print('RemoteParticipant ${remoteParticipant.identity} is in the room');
+    // // Only add ourselves when connected for the first time too.
+    _participants.add(BuildParticipant(
+        widget: localParticipant.localVideoTracks[0].localVideoTrack.widget(),
         id: identity));
 
     for (final remoteParticipant in room.remoteParticipants) {
@@ -104,7 +152,7 @@ class ConferenceCubit extends TwilioBaseCubit<CubitBaseState> {
         _addRemoteParticipantListeners(remoteParticipant);
       }
     }
-    reload();
+    // reload();
   }
 
   void _onConnectFailure(RoomConnectFailureEvent event) {
@@ -114,16 +162,21 @@ class ConferenceCubit extends TwilioBaseCubit<CubitBaseState> {
   void _onParticipantConnected(RoomParticipantConnectedEvent event) {
     print(
         '[ APPDEBUG ] ConferenceRoom._onParticipantConnected, ${event.remoteParticipant.sid}');
+    // _addRemoteParticipantListeners(event.remoteParticipant);
+    print(
+        '[ APPDEBUG ] ConferenceRoom._onParticipantConnected, ${event.remoteParticipant.identity}');
     _addRemoteParticipantListeners(event.remoteParticipant);
-    reload();
+    // reload();
   }
 
   void _onParticipantDisconnected(RoomParticipantDisconnectedEvent event) {
     print(
         '[ APPDEBUG ] ConferenceRoom._onParticipantDisconnected: ${event.remoteParticipant.sid}');
-    _participants.removeWhere(
-        (ParticipantWidget p) => p.id == event.remoteParticipant.sid);
-    reload();
+    print(
+        '[ APPDEBUG ] ConferenceRoom._onParticipantDisconnected: ${event.remoteParticipant.identity}');
+    // _participants.removeWhere(
+    //     (ParticipantWidget p) => p.id == event.remoteParticipant.sid);
+    // reload();
   }
 
   void _addRemoteParticipantListeners(RemoteParticipant remoteParticipant) {
@@ -137,7 +190,7 @@ class ConferenceCubit extends TwilioBaseCubit<CubitBaseState> {
     print(
         '[ APPDEBUG ] ConferenceRoom._addOrUpdateParticipant(), ${event.remoteParticipant.sid}');
     final participant = _participants.firstWhereOrNull(
-      (ParticipantWidget participant) =>
+      (BuildParticipant participant) =>
           participant.id == event.remoteParticipant.sid,
     );
 
@@ -150,13 +203,28 @@ class ConferenceCubit extends TwilioBaseCubit<CubitBaseState> {
             '[ APPDEBUG ] New participant, adding: ${event.remoteParticipant.sid}');
         _participants.insert(
           0,
-          _buildParticipant(
-            child: event.remoteVideoTrack.widget(),
-            id: event.remoteParticipant.sid,
+          BuildParticipant(
+            widget: event.remoteVideoTrack.widget(),
+            id: event.remoteParticipant.sid!,
           ),
         );
-        reload();
+        // reload();
       }
     }
   }
+
+  // Room _room;
+  // final Completer<Room> _completer = Completer<Room>();
+
+  // void _onConnected(Room room) {
+  //   print('Connected to ${room.name}');
+  //   _completer.complete(_room);
+  // }
+
+  // void _onConnectFailure(RoomConnectFailureEvent event) {
+  //   print(
+  //       'Failed to connect to room ${event.room.name} with exception: ${event.exception}');
+  //   _completer.completeError(event.exception);
+  // }
+
 }
